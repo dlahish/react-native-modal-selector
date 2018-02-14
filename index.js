@@ -197,10 +197,9 @@ export default class ModalSelector extends React.Component {
                             <ScrollView
                                 keyboardShouldPersistTaps={this.props.keyboardShouldPersistTaps}
                                 accessible={this.props.accessible}
-                                accessibilityLabel={this.props.scrollViewAccessibilityLabel}>
-                                <View style={{paddingHorizontal: 10}}>
-                                    {options}
-                                </View>
+                                accessibilityLabel={this.props.scrollViewAccessibilityLabel}
+                            >
+                                {options}
                             </ScrollView>
                         </View>
                         <View style={[styles.cancelContainer, this.props.cancelContainerStyle]}>
