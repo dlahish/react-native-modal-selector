@@ -12,6 +12,7 @@ import {
     TouchableWithoutFeedback,
     Platform,
     ViewPropTypes as RNViewPropTypes,
+    Animated,
 } from 'react-native';
 
 import styles from './style';
@@ -45,6 +46,10 @@ const propTypes = {
     accessible:                     PropTypes.bool,
     scrollViewAccessibilityLabel:   PropTypes.string,
     cancelButtonAccessibilityLabel: PropTypes.string,
+    modalVisible:                   PropTypes.bool,
+    showRootElement:                PropTypes.bool,
+    renderRow:                      PropTypes.func,
+    onModalVisibleChange:           PropTypes.func,
 };
 
 const defaultProps = {
@@ -72,6 +77,8 @@ const defaultProps = {
     accessible:                     false,
     scrollViewAccessibilityLabel:   undefined,
     cancelButtonAccessibilityLabel: undefined,
+    modalVisible:                   false,
+    showRootElement:                true,
 };
 
 export default class ModalSelector extends React.Component {
@@ -84,10 +91,22 @@ export default class ModalSelector extends React.Component {
             selected:      props.initValue,
             cancelText:    props.cancelText,
             changedItem:   undefined,
+            anim: new Animated.Value(0),
         };
     }
 
     componentWillReceiveProps(nextProps) {
+        if (!this.state.modalVisible && nextProps.modalVisible) {
+            this.setState({modalVisible: true}, () => {
+                Animated.timing(this.state.anim, {
+                    duration: 450,
+                    toValue: 1,
+                }).start();
+            })
+        } else if (this.state.modalVisible && !nextProps.modalVisible) {
+            this.setState({modalVisible: false})
+        }
+
         if (nextProps.initValue !== this.props.initValue) {
             this.setState({selected: nextProps.initValue});
         }
@@ -103,16 +122,24 @@ export default class ModalSelector extends React.Component {
     }
 
     close = () => {
+        this.state.anim.setValue(0)
         this.setState({
             modalVisible: false,
         });
+        this.props.onModalVisibleChange && this.props.onModalVisibleChange(false);
     }
 
     open = () => {
         this.setState({
             modalVisible: true,
             changedItem:  undefined,
+        }, () => {
+            Animated.timing(this.state.anim, {
+                duration: 450,
+                toValue: 1,
+            }).start();
         });
+        this.props.onModalVisibleChange && this.props.onModalVisibleChange(true);
     }
 
     renderSection = (section) => {
@@ -123,14 +150,20 @@ export default class ModalSelector extends React.Component {
         );
     }
 
-    renderOption = (option, isLastItem) => {
-        return (
-            <TouchableOpacity key={option.key} onPress={() => this.onChange(option)} accessible={this.props.accessible} accessibilityLabel={option.accessibilityLabel || undefined}>
-                <View style={[styles.optionStyle, this.props.optionStyle, isLastItem &&
-                {borderBottomWidth: 0}]}>
-                    <Text style={[styles.optionTextStyle,this.props.optionTextStyle]}>{option.label}</Text>
-                </View>
-            </TouchableOpacity>);
+    renderOption = (option, isLastItem, index) => {
+        if (this.props.renderRow) {
+            return this.props.renderRow(option, isLastItem, index, this.close)
+        } else {
+            return (
+                <TouchableOpacity key={option.key} onPress={() => this.onChange(option)}
+                                  accessible={this.props.accessible}
+                                  accessibilityLabel={option.accessibilityLabel || undefined}>
+                    <View style={[styles.optionStyle, this.props.optionStyle, isLastItem &&
+                    {borderBottomWidth: 0}]}>
+                        <Text style={[styles.optionTextStyle, this.props.optionTextStyle]}>{option.label}</Text>
+                    </View>
+                </TouchableOpacity>);
+        }
     }
 
     renderOptionList = () => {
@@ -139,7 +172,7 @@ export default class ModalSelector extends React.Component {
             if (item.section) {
                 return this.renderSection(item);
             }
-            return this.renderOption(item, index === this.props.data.length - 1);
+            return this.renderOption(item, index === this.props.data.length - 1, index);
         });
 
         const closeOverlay = this.props.backdropPressToClose;
@@ -149,20 +182,35 @@ export default class ModalSelector extends React.Component {
                 closeOverlay && this.close();
             }}>
                 <View style={[styles.overlayStyle, this.props.overlayStyle]}>
-                    <View style={[styles.optionContainer, this.props.optionContainerStyle]}>
-                        <ScrollView keyboardShouldPersistTaps={this.props.keyboardShouldPersistTaps} accessible={this.props.accessible} accessibilityLabel={this.props.scrollViewAccessibilityLabel}>
-                            <View style={{paddingHorizontal: 10}}>
-                                {options}
-                            </View>
-                        </ScrollView>
-                    </View>
-                    <View style={[styles.cancelContainer, this.props.cancelContainerStyle]}>
-                        <TouchableOpacity onPress={this.close} accessible={this.props.accessible} accessibilityLabel={this.props.cancelButtonAccessibilityLabel}>
-                            <View style={[styles.cancelStyle, this.props.cancelStyle]}>
-                                <Text style={[styles.cancelTextStyle,this.props.cancelTextStyle]}>{this.props.cancelText}</Text>
-                            </View>
-                        </TouchableOpacity>
-                    </View>
+                    <Animated.View style={[{flex: 1, justifyContent: 'flex-end'}, {
+                        transform: [
+                            {
+                                translateY: this.props.animationType === 'none'
+                                    ? this.state.anim.interpolate({
+                                        inputRange: [0, 1],
+                                        outputRange: [400, 0],
+                                    })
+                                    : 0,
+                            }],
+                    }]}>
+                        <View style={[styles.optionContainer, this.props.optionContainerStyle]}>
+                            <ScrollView
+                                keyboardShouldPersistTaps={this.props.keyboardShouldPersistTaps}
+                                accessible={this.props.accessible}
+                                accessibilityLabel={this.props.scrollViewAccessibilityLabel}>
+                                <View style={{paddingHorizontal: 10}}>
+                                    {options}
+                                </View>
+                            </ScrollView>
+                        </View>
+                        <View style={[styles.cancelContainer, this.props.cancelContainerStyle]}>
+                            <TouchableOpacity onPress={this.close} accessible={this.props.accessible} accessibilityLabel={this.props.cancelButtonAccessibilityLabel}>
+                                <View style={[styles.cancelStyle, this.props.cancelStyle]}>
+                                    <Text style={[styles.cancelTextStyle,this.props.cancelTextStyle]}>{this.props.cancelText}</Text>
+                                </View>
+                            </TouchableOpacity>
+                        </View>
+                    </Animated.View>
                 </View>
             </TouchableWithoutFeedback>);
     }
@@ -198,11 +246,12 @@ export default class ModalSelector extends React.Component {
         return (
             <View style={this.props.style}>
                 {dp}
+                {this.props.showRootElement &&
                 <TouchableOpacity onPress={this.open} disabled={this.props.disabled}>
                     <View pointerEvents="none">
                         {this.renderChildren()}
                     </View>
-                </TouchableOpacity>
+                </TouchableOpacity>}
             </View>
         );
     }
